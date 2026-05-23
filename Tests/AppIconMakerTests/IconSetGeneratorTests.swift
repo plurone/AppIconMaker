@@ -69,6 +69,23 @@ struct IconSetGeneratorTests {
         #expect(try alpha(atX: 0, y: 512, in: tall.cgImage) == 0)
     }
 
+    @Test("custom composition scales and offsets the prepared image")
+    func customCompositionScalesAndOffsetsPreparedImage() throws {
+        let options = ImagePreparationOptions(
+            mode: .transparentPadding,
+            contentScale: 0.5,
+            horizontalOffset: 0.25,
+            verticalOffset: -0.25
+        )
+
+        let prepared = try ImagePreparer.prepare(makeImage(width: 1024, height: 1024), options: options)
+
+        #expect(prepared.options == options)
+        #expect(try alpha(atX: 256, y: 256, in: prepared.cgImage) == 0)
+        #expect(try alpha(atX: 768, y: 256, in: prepared.cgImage) == 0)
+        #expect(try alpha(atX: 768, y: 768, in: prepared.cgImage) == 255)
+    }
+
     @Test("generates iOS universal icon set files and Contents.json")
     func generatesIOSUniversalIconSet() throws {
         try assertGeneratedIconSet(for: .iosUniversal)
@@ -117,6 +134,65 @@ struct IconSetGeneratorTests {
         })
     }
 
+    @Test("quality check reports transparent iOS icons without an output directory")
+    func qualityCheckReportsTransparentIOSIconsWithoutOutputDirectory() throws {
+        let prepared = try ImagePreparer.prepare(makeImage(width: 2048, height: 1024), mode: .transparentPadding)
+
+        let result = ExportQualityCheck.inspect(
+            sourceWidth: 2048,
+            sourceHeight: 1024,
+            preparedImage: prepared,
+            preset: .iosUniversal
+        )
+
+        #expect(result.canExport == false)
+        #expect(result.blockingIssues.contains {
+            $0.kind == .appStoreIconContainsAlpha
+        })
+    }
+
+    @Test("quality check reports scaling and transparent coverage risks")
+    func qualityCheckReportsScalingAndTransparentCoverageRisks() throws {
+        let prepared = try ImagePreparer.prepare(makeImage(width: 256, height: 512), mode: .transparentPadding)
+
+        let result = ExportQualityCheck.inspect(
+            sourceWidth: 256,
+            sourceHeight: 512,
+            preparedImage: prepared,
+            preset: .macOS
+        )
+
+        #expect(result.canExport)
+        #expect(result.warnings.contains {
+            $0.kind == .sourceWillUpscale(scale: 2.0)
+        })
+        #expect(result.warnings.contains {
+            $0.kind == .transparentContentTooSmall(coverage: 0.5)
+        })
+    }
+
+    @Test("quality check reflects custom content scale")
+    func qualityCheckReflectsCustomContentScale() throws {
+        let prepared = try ImagePreparer.prepare(
+            makeImage(width: 256, height: 512),
+            options: .init(mode: .transparentPadding, contentScale: 0.75)
+        )
+
+        let result = ExportQualityCheck.inspect(
+            sourceWidth: 256,
+            sourceHeight: 512,
+            preparedImage: prepared,
+            preset: .macOS
+        )
+
+        #expect(result.warnings.contains {
+            $0.kind == .sourceWillUpscale(scale: 1.5)
+        })
+        #expect(result.warnings.contains {
+            $0.kind == .transparentContentTooSmall(coverage: 0.375)
+        })
+    }
+
     @Test("preflight allows transparent iOS sources when opaque background will be composited")
     func preflightAllowsOpaqueCompositedIOSMarketingIcons() throws {
         let directory = try temporaryDirectory()
@@ -128,6 +204,22 @@ struct IconSetGeneratorTests {
             preparedImage: prepared,
             preset: .iosUniversal,
             outputDirectory: directory,
+            willCompositeOpaqueBackground: true
+        )
+
+        #expect(result.canExport)
+        #expect(result.blockingIssues.isEmpty)
+    }
+
+    @Test("quality check clears transparent iOS issue when an opaque background is composited")
+    func qualityCheckAllowsOpaqueCompositedIOSMarketingIcons() throws {
+        let prepared = try ImagePreparer.prepare(makeImage(width: 2048, height: 1024), mode: .transparentPadding)
+
+        let result = ExportQualityCheck.inspect(
+            sourceWidth: 2048,
+            sourceHeight: 1024,
+            preparedImage: prepared,
+            preset: .iosUniversal,
             willCompositeOpaqueBackground: true
         )
 
@@ -240,6 +332,26 @@ struct IconSetGeneratorTests {
         #expect(summary.generatedFileCount == IconPlatformPreset.iosUniversal.slots.count + 1)
     }
 
+    @Test("export summary includes custom composition settings")
+    func exportSummaryIncludesCustomCompositionSettings() throws {
+        let directory = try temporaryDirectory()
+        let outputURL = directory.appendingPathComponent(IconPlatformPreset.macOS.appIconSetName)
+        let options = ImagePreparationOptions(
+            mode: .transparentPadding,
+            contentScale: 0.75,
+            horizontalOffset: 0.10,
+            verticalOffset: -0.05
+        )
+
+        let summary = ExportPreflight.summary(
+            outputURL: outputURL,
+            preset: .macOS,
+            preparationOptions: options
+        )
+
+        #expect(summary.preparationName == "透明填充 · 75% · 偏移 10, -5")
+    }
+
     @Test("slot-aware export applies transparent padding at each target size")
     func slotAwareExportAppliesTransparentPaddingAtEachTargetSize() throws {
         let directory = try temporaryDirectory()
@@ -335,13 +447,27 @@ struct IconSetGeneratorTests {
         #expect(try alpha(atX: 8, y: 15, in: image) == 0)
     }
 
-    @Test("export preview slots use unique sorted output sizes")
-    func exportPreviewSlotsUseUniqueSortedOutputSizes() {
-        let iOSSizes = ExportPreviewGenerator.previewSlots(for: .iosUniversal).map(\.pixelSize)
-        let macOSSizes = ExportPreviewGenerator.previewSlots(for: .macOS).map(\.pixelSize)
+    @Test("export preview groups use unique sorted output sizes and preserve slot uses")
+    func exportPreviewGroupsUseUniqueSortedOutputSizesAndPreserveSlotUses() throws {
+        let iOSGroups = ExportPreviewGenerator.previewGroups(for: .iosUniversal)
+        let macOSGroups = ExportPreviewGenerator.previewGroups(for: .macOS)
+        let iOSSizes = iOSGroups.map(\.pixelSize)
+        let macOSSizes = macOSGroups.map(\.pixelSize)
 
         #expect(iOSSizes == [20, 29, 40, 58, 60, 76, 80, 87, 120, 152, 167, 180, 1024])
         #expect(macOSSizes == [16, 32, 64, 128, 256, 512, 1024])
+
+        let iOS120 = try #require(iOSGroups.first { $0.pixelSize == 120 })
+        #expect(iOS120.usageLabels == [
+            "iPhone · 40x40 · 3x",
+            "iPhone · 60x60 · 2x"
+        ])
+
+        let macOS32 = try #require(macOSGroups.first { $0.pixelSize == 32 })
+        #expect(macOS32.usageLabels == [
+            "macOS · 16x16 · 2x",
+            "macOS · 32x32 · 1x"
+        ])
     }
 
     @Test("export previews render with their target pixel sizes")
@@ -352,12 +478,41 @@ struct IconSetGeneratorTests {
             preset: .macOS
         )
 
-        #expect(previews.count == ExportPreviewGenerator.previewSlots(for: .macOS).count)
+        #expect(previews.count == ExportPreviewGenerator.previewGroups(for: .macOS).count)
 
         for preview in previews {
             #expect(preview.cgImage.width == preview.pixelSize)
             #expect(preview.cgImage.height == preview.pixelSize)
             #expect(preview.previewImage.size == NSSize(width: preview.pixelSize, height: preview.pixelSize))
+            #expect(preview.usageLabels.isEmpty == false)
+        }
+    }
+
+    @Test("custom composition is identical in previews and generated output")
+    func customCompositionMatchesPreviewsAndGeneratedOutput() throws {
+        let directory = try temporaryDirectory()
+        let source = try makeImage(width: 1024, height: 1024)
+        let options = ImagePreparationOptions(
+            mode: .transparentPadding,
+            contentScale: 0.5,
+            horizontalOffset: 0.25
+        )
+
+        let preview = try #require(ExportPreviewGenerator.previews(
+            from: source,
+            options: options,
+            preset: .macOS
+        ).first { $0.pixelSize == 16 })
+        let outputURL = try IconSetGenerator().generate(
+            from: source,
+            options: options,
+            preset: .macOS,
+            outputDirectory: directory
+        )
+        let output = try #require(loadImage(at: outputURL.appendingPathComponent("icon_16x16.png")))
+
+        for point in [(x: 2, y: 8), (x: 12, y: 8)] {
+            #expect(try alpha(atX: point.x, y: point.y, in: preview.cgImage) == alpha(atX: point.x, y: point.y, in: output))
         }
     }
 

@@ -27,6 +27,50 @@ public enum ImagePreparationMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+public struct ImagePreparationOptions: Equatable, Sendable {
+    public static let contentScaleRange = 0.50...1.50
+    public static let offsetRange = -0.35...0.35
+
+    public var mode: ImagePreparationMode
+    public var contentScale: Double
+    public var horizontalOffset: Double
+    public var verticalOffset: Double
+
+    public init(
+        mode: ImagePreparationMode = .centerCrop,
+        contentScale: Double = 1.0,
+        horizontalOffset: Double = 0.0,
+        verticalOffset: Double = 0.0
+    ) {
+        self.mode = mode
+        self.contentScale = contentScale
+        self.horizontalOffset = horizontalOffset
+        self.verticalOffset = verticalOffset
+    }
+
+    var normalized: ImagePreparationOptions {
+        ImagePreparationOptions(
+            mode: mode,
+            contentScale: contentScale.clamped(to: Self.contentScaleRange),
+            horizontalOffset: horizontalOffset.clamped(to: Self.offsetRange),
+            verticalOffset: verticalOffset.clamped(to: Self.offsetRange)
+        )
+    }
+
+    public var displayDescription: String {
+        let normalized = normalized
+        let percentage = Int((normalized.contentScale * 100).rounded())
+        let horizontal = Int((normalized.horizontalOffset * 100).rounded())
+        let vertical = Int((normalized.verticalOffset * 100).rounded())
+
+        guard percentage != 100 || horizontal != 0 || vertical != 0 else {
+            return normalized.mode.displayName
+        }
+
+        return "\(normalized.mode.displayName) · \(percentage)% · 偏移 \(horizontal), \(vertical)"
+    }
+}
+
 public enum ImagePreparationError: LocalizedError {
     case cannotCreateContext
     case cannotCreateImage
@@ -46,14 +90,23 @@ public struct PreparedImage {
     public let previewImage: NSImage
     public let width: Int
     public let height: Int
-    public let mode: ImagePreparationMode
+    public let options: ImagePreparationOptions
+
+    public var mode: ImagePreparationMode {
+        options.mode
+    }
 }
 
 public enum ImagePreparer {
     public static let outputPixelSize = 1024
 
     public static func prepare(_ sourceImage: CGImage, mode: ImagePreparationMode) throws -> PreparedImage {
+        try prepare(sourceImage, options: .init(mode: mode))
+    }
+
+    public static func prepare(_ sourceImage: CGImage, options: ImagePreparationOptions) throws -> PreparedImage {
         let pixelSize = outputPixelSize
+        let options = options.normalized
         let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
 
@@ -71,7 +124,7 @@ public enum ImagePreparer {
 
         context.clear(CGRect(x: 0, y: 0, width: pixelSize, height: pixelSize))
         context.interpolationQuality = .high
-        context.draw(sourceImage, in: drawRect(for: sourceImage, mode: mode, pixelSize: pixelSize))
+        context.draw(sourceImage, in: drawRect(for: sourceImage, options: options, pixelSize: pixelSize))
 
         guard let image = context.makeImage() else {
             throw ImagePreparationError.cannotCreateImage
@@ -82,30 +135,42 @@ public enum ImagePreparer {
             previewImage: NSImage(cgImage: image, size: NSSize(width: pixelSize, height: pixelSize)),
             width: pixelSize,
             height: pixelSize,
-            mode: mode
+            options: options
         )
     }
 
     static func drawRect(for sourceImage: CGImage, mode: ImagePreparationMode, pixelSize: Int) -> CGRect {
+        drawRect(for: sourceImage, options: .init(mode: mode), pixelSize: pixelSize)
+    }
+
+    static func drawRect(for sourceImage: CGImage, options: ImagePreparationOptions, pixelSize: Int) -> CGRect {
         let sourceWidth = CGFloat(sourceImage.width)
         let sourceHeight = CGFloat(sourceImage.height)
         let canvasSize = CGFloat(pixelSize)
+        let options = options.normalized
 
-        let scale: CGFloat
-        switch mode {
+        let baseScale: CGFloat
+        switch options.mode {
         case .centerCrop:
-            scale = max(canvasSize / sourceWidth, canvasSize / sourceHeight)
+            baseScale = max(canvasSize / sourceWidth, canvasSize / sourceHeight)
         case .transparentPadding:
-            scale = min(canvasSize / sourceWidth, canvasSize / sourceHeight)
+            baseScale = min(canvasSize / sourceWidth, canvasSize / sourceHeight)
         }
 
+        let scale = baseScale * CGFloat(options.contentScale)
         let width = sourceWidth * scale
         let height = sourceHeight * scale
         return CGRect(
-            x: (canvasSize - width) / 2,
-            y: (canvasSize - height) / 2,
+            x: (canvasSize - width) / 2 + CGFloat(options.horizontalOffset) * canvasSize,
+            y: (canvasSize - height) / 2 + CGFloat(options.verticalOffset) * canvasSize,
             width: width,
             height: height
         )
+    }
+}
+
+private extension Double {
+    func clamped(to range: ClosedRange<Double>) -> Double {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }

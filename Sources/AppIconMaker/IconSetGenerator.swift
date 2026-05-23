@@ -57,10 +57,27 @@ public struct IconSetGenerator {
         outputDirectory: URL,
         opaqueBackgroundColor: CGColor? = nil
     ) throws -> URL {
+        try generate(
+            from: sourceImage,
+            options: .init(mode: mode),
+            preset: preset,
+            outputDirectory: outputDirectory,
+            opaqueBackgroundColor: opaqueBackgroundColor
+        )
+    }
+
+    @discardableResult
+    public func generate(
+        from sourceImage: CGImage,
+        options: ImagePreparationOptions,
+        preset: IconPlatformPreset,
+        outputDirectory: URL,
+        opaqueBackgroundColor: CGColor? = nil
+    ) throws -> URL {
         try generate(preset: preset, outputDirectory: outputDirectory) { slot in
             try IconResampling.render(
                 sourceImage,
-                mode: mode,
+                options: options,
                 pixelSize: slot.pixelSize,
                 opaqueBackgroundColor: opaqueBackgroundColor
             )
@@ -136,7 +153,21 @@ enum IconResampling {
     ) throws -> CGImage {
         try render(
             image,
-            drawRect: ImagePreparer.drawRect(for: image, mode: mode, pixelSize: pixelSize),
+            options: .init(mode: mode),
+            pixelSize: pixelSize,
+            opaqueBackgroundColor: opaqueBackgroundColor
+        )
+    }
+
+    static func render(
+        _ image: CGImage,
+        options: ImagePreparationOptions,
+        pixelSize: Int,
+        opaqueBackgroundColor: CGColor? = nil
+    ) throws -> CGImage {
+        try render(
+            image,
+            drawRect: ImagePreparer.drawRect(for: image, options: options, pixelSize: pixelSize),
             pixelSize: pixelSize,
             opaqueBackgroundColor: opaqueBackgroundColor
         )

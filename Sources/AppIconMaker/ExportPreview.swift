@@ -2,31 +2,48 @@ import AppKit
 import CoreGraphics
 import Foundation
 
+struct ExportPreviewSlotGroup: Identifiable {
+    let pixelSize: Int
+    let slots: [IconSlot]
+
+    var id: Int {
+        pixelSize
+    }
+
+    var usageLabels: [String] {
+        slots.map(\.previewUsageLabel)
+    }
+}
+
 struct ExportIconPreview: Identifiable {
-    let id: String
-    let slot: IconSlot
+    let group: ExportPreviewSlotGroup
     let cgImage: CGImage
     let previewImage: NSImage
 
+    var id: Int {
+        group.id
+    }
+
     var pixelSize: Int {
-        slot.pixelSize
+        group.pixelSize
     }
 
     var sizeLabel: String {
-        "\(slot.pixelSize)px"
+        "\(group.pixelSize)px"
     }
 
-    var detailLabel: String {
-        "\(slot.idiom) · \(slot.size) · \(slot.scale)"
+    var usageLabels: [String] {
+        group.usageLabels
     }
 }
 
 enum ExportPreviewGenerator {
-    static func previewSlots(for preset: IconPlatformPreset) -> [IconSlot] {
-        var seenPixelSizes = Set<Int>()
-        return preset.slots
-            .filter { slot in
-                seenPixelSizes.insert(slot.pixelSize).inserted
+    static func previewGroups(for preset: IconPlatformPreset) -> [ExportPreviewSlotGroup] {
+        let groupedSlots = Dictionary(grouping: preset.slots, by: \.pixelSize)
+
+        return groupedSlots
+            .map { pixelSize, slots in
+                ExportPreviewSlotGroup(pixelSize: pixelSize, slots: slots)
             }
             .sorted { lhs, rhs in
                 lhs.pixelSize < rhs.pixelSize
@@ -39,22 +56,56 @@ enum ExportPreviewGenerator {
         preset: IconPlatformPreset,
         opaqueBackgroundColor: CGColor? = nil
     ) throws -> [ExportIconPreview] {
-        try previewSlots(for: preset).map { slot in
+        try previews(
+            from: sourceImage,
+            options: .init(mode: mode),
+            preset: preset,
+            opaqueBackgroundColor: opaqueBackgroundColor
+        )
+    }
+
+    static func previews(
+        from sourceImage: CGImage,
+        options: ImagePreparationOptions,
+        preset: IconPlatformPreset,
+        opaqueBackgroundColor: CGColor? = nil
+    ) throws -> [ExportIconPreview] {
+        try previewGroups(for: preset).map { group in
             let image = try IconResampling.render(
                 sourceImage,
-                mode: mode,
-                pixelSize: slot.pixelSize,
+                options: options,
+                pixelSize: group.pixelSize,
                 opaqueBackgroundColor: opaqueBackgroundColor
             )
             return ExportIconPreview(
-                id: "\(slot.pixelSize)",
-                slot: slot,
+                group: group,
                 cgImage: image,
                 previewImage: NSImage(
                     cgImage: image,
-                    size: NSSize(width: slot.pixelSize, height: slot.pixelSize)
+                    size: NSSize(width: group.pixelSize, height: group.pixelSize)
                 )
             )
+        }
+    }
+}
+
+private extension IconSlot {
+    var previewUsageLabel: String {
+        "\(previewIdiomLabel) · \(size) · \(scale)"
+    }
+
+    private var previewIdiomLabel: String {
+        switch idiom {
+        case "iphone":
+            "iPhone"
+        case "ipad":
+            "iPad"
+        case "ios-marketing":
+            "App Store"
+        case "mac":
+            "macOS"
+        default:
+            idiom
         }
     }
 }

@@ -18,6 +18,12 @@
 		0D1F00340000000000000001 /* ExportPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1F00350000000000000001 /* ExportPreflight.swift */; };
 		0D1F00360000000000000001 /* ExportPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1F00370000000000000001 /* ExportPreview.swift */; };
 		0D1F00380000000000000001 /* ImageNormalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1F00390000000000000001 /* ImageNormalizer.swift */; };
+		0D1F003A0000000000000001 /* AppIconMakerState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1F00400000000000000001 /* AppIconMakerState.swift */; };
+		0D1F003B0000000000000001 /* DropPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1F00410000000000000001 /* DropPreviewView.swift */; };
+		0D1F003C0000000000000001 /* ExportPreviewPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1F00420000000000000001 /* ExportPreviewPanel.swift */; };
+		0D1F003D0000000000000001 /* ExportWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1F00430000000000000001 /* ExportWorkflow.swift */; };
+		0D1F003E0000000000000001 /* InspectorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1F00440000000000000001 /* InspectorPanel.swift */; };
+		0D1F003F0000000000000001 /* ToolbarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1F00450000000000000001 /* ToolbarView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +50,12 @@
 		0D1F00350000000000000001 /* ExportPreflight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportPreflight.swift; sourceTree = "<group>"; };
 		0D1F00370000000000000001 /* ExportPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportPreview.swift; sourceTree = "<group>"; };
 		0D1F00390000000000000001 /* ImageNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageNormalizer.swift; sourceTree = "<group>"; };
+		0D1F00400000000000000001 /* AppIconMakerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconMakerState.swift; sourceTree = "<group>"; };
+		0D1F00410000000000000001 /* DropPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DropPreviewView.swift; sourceTree = "<group>"; };
+		0D1F00420000000000000001 /* ExportPreviewPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportPreviewPanel.swift; sourceTree = "<group>"; };
+		0D1F00430000000000000001 /* ExportWorkflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportWorkflow.swift; sourceTree = "<group>"; };
+		0D1F00440000000000000001 /* InspectorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPanel.swift; sourceTree = "<group>"; };
+		0D1F00450000000000000001 /* ToolbarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -86,14 +98,20 @@
 			isa = PBXGroup;
 			children = (
 				0D1F00110000000000000001 /* AppIconMakerApp.swift */,
+				0D1F00400000000000000001 /* AppIconMakerState.swift */,
 				0D1F00120000000000000001 /* ContentView.swift */,
+				0D1F00410000000000000001 /* DropPreviewView.swift */,
 				0D1F00350000000000000001 /* ExportPreflight.swift */,
 				0D1F00370000000000000001 /* ExportPreview.swift */,
+				0D1F00420000000000000001 /* ExportPreviewPanel.swift */,
+				0D1F00430000000000000001 /* ExportWorkflow.swift */,
 				0D1F00130000000000000001 /* IconModels.swift */,
 				0D1F00140000000000000001 /* IconSetGenerator.swift */,
 				0D1F00390000000000000001 /* ImageNormalizer.swift */,
 				0D1F00300000000000000001 /* ImagePreparer.swift */,
 				0D1F00150000000000000001 /* ImageValidator.swift */,
+				0D1F00440000000000000001 /* InspectorPanel.swift */,
+				0D1F00450000000000000001 /* ToolbarView.swift */,
 			);
 			path = AppIconMaker;
 			sourceTree = "<group>";
@@ -231,14 +249,20 @@
 			buildActionMask = 2147483647;
 			files = (
 				0D1F00010000000000000001 /* AppIconMakerApp.swift in Sources */,
+				0D1F003A0000000000000001 /* AppIconMakerState.swift in Sources */,
 				0D1F00020000000000000001 /* ContentView.swift in Sources */,
+				0D1F003B0000000000000001 /* DropPreviewView.swift in Sources */,
 				0D1F00340000000000000001 /* ExportPreflight.swift in Sources */,
 				0D1F00360000000000000001 /* ExportPreview.swift in Sources */,
+				0D1F003C0000000000000001 /* ExportPreviewPanel.swift in Sources */,
+				0D1F003D0000000000000001 /* ExportWorkflow.swift in Sources */,
 				0D1F00030000000000000001 /* IconModels.swift in Sources */,
 				0D1F00040000000000000001 /* IconSetGenerator.swift in Sources */,
 				0D1F00380000000000000001 /* ImageNormalizer.swift in Sources */,
 				0D1F00090000000000000001 /* ImagePreparer.swift in Sources */,
 				0D1F00050000000000000001 /* ImageValidator.swift in Sources */,
+				0D1F003E0000000000000001 /* InspectorPanel.swift in Sources */,
+				0D1F003F0000000000000001 /* ToolbarView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

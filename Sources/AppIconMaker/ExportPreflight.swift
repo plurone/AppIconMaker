@@ -85,6 +85,22 @@ public struct ExportPreflightResult: Equatable {
     }
 }
 
+public struct ExportQualityCheckResult: Equatable {
+    public let issues: [ExportPreflightIssue]
+
+    public var blockingIssues: [ExportPreflightIssue] {
+        issues.filter { $0.severity == .blocking }
+    }
+
+    public var warnings: [ExportPreflightIssue] {
+        issues.filter { $0.severity == .warning }
+    }
+
+    public var canExport: Bool {
+        blockingIssues.isEmpty
+    }
+}
+
 public struct ExportSummary: Equatable {
     public let outputURL: URL
     public let platformName: String
@@ -93,8 +109,115 @@ public struct ExportSummary: Equatable {
     public let generatedFileCount: Int
 }
 
-public enum ExportPreflight {
+public enum ExportQualityCheck {
     public static let transparentCoverageWarningThreshold = 0.60
+
+    public static func inspect(
+        source: ValidatedImage,
+        preparedImage: PreparedImage,
+        preset: IconPlatformPreset,
+        willCompositeOpaqueBackground: Bool = false
+    ) -> ExportQualityCheckResult {
+        inspect(
+            sourceWidth: source.width,
+            sourceHeight: source.height,
+            preparedImage: preparedImage,
+            preset: preset,
+            willCompositeOpaqueBackground: willCompositeOpaqueBackground
+        )
+    }
+
+    public static func inspect(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        preparedImage: PreparedImage,
+        preset: IconPlatformPreset,
+        willCompositeOpaqueBackground: Bool = false
+    ) -> ExportQualityCheckResult {
+        var issues: [ExportPreflightIssue] = []
+
+        if preset == .iosUniversal,
+           willCompositeOpaqueBackground == false,
+           containsTransparentPixels(preparedImage.cgImage) {
+            issues.append(.init(kind: .appStoreIconContainsAlpha, severity: .blocking))
+        }
+
+        let scale = preparationScale(
+            sourceWidth: sourceWidth,
+            sourceHeight: sourceHeight,
+            options: preparedImage.options
+        )
+        if scale > 1.0 {
+            issues.append(.init(kind: .sourceWillUpscale(scale: scale), severity: .warning))
+        }
+
+        if preparedImage.mode == .transparentPadding {
+            let coverage = transparentContentCoverage(
+                sourceWidth: sourceWidth,
+                sourceHeight: sourceHeight,
+                options: preparedImage.options
+            )
+            if coverage < transparentCoverageWarningThreshold {
+                issues.append(.init(kind: .transparentContentTooSmall(coverage: coverage), severity: .warning))
+            }
+        }
+
+        return .init(issues: issues)
+    }
+
+    private static func preparationScale(sourceWidth: Int, sourceHeight: Int, options: ImagePreparationOptions) -> Double {
+        let sourceWidth = Double(sourceWidth)
+        let sourceHeight = Double(sourceHeight)
+        let canvasSize = Double(ImagePreparer.outputPixelSize)
+        let options = options.normalized
+
+        switch options.mode {
+        case .centerCrop:
+            return max(canvasSize / sourceWidth, canvasSize / sourceHeight) * options.contentScale
+        case .transparentPadding:
+            return min(canvasSize / sourceWidth, canvasSize / sourceHeight) * options.contentScale
+        }
+    }
+
+    private static func transparentContentCoverage(
+        sourceWidth: Int,
+        sourceHeight: Int,
+        options: ImagePreparationOptions
+    ) -> Double {
+        let shorterSide = Double(min(sourceWidth, sourceHeight))
+        let longerSide = Double(max(sourceWidth, sourceHeight))
+        return min((shorterSide / longerSide) * options.normalized.contentScale, 1.0)
+    }
+
+    private static func containsTransparentPixels(_ image: CGImage) -> Bool {
+        let width = image.width
+        let height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return false
+        }
+
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        for index in stride(from: 3, to: pixels.count, by: 4) where pixels[index] < UInt8.max {
+            return true
+        }
+        return false
+    }
+}
+
+public enum ExportPreflight {
+    public static let transparentCoverageWarningThreshold = ExportQualityCheck.transparentCoverageWarningThreshold
 
     public static func inspect(
         source: ValidatedImage,
@@ -137,27 +260,14 @@ public enum ExportPreflight {
             issues.append(.init(kind: .existingAppIconSetWillBeReplaced, severity: .warning))
         }
 
-        if preset == .iosUniversal,
-           willCompositeOpaqueBackground == false,
-           containsTransparentPixels(preparedImage.cgImage) {
-            issues.append(.init(kind: .appStoreIconContainsAlpha, severity: .blocking))
-        }
-
-        let scale = preparationScale(
+        let qualityCheck = ExportQualityCheck.inspect(
             sourceWidth: sourceWidth,
             sourceHeight: sourceHeight,
-            mode: preparedImage.mode
+            preparedImage: preparedImage,
+            preset: preset,
+            willCompositeOpaqueBackground: willCompositeOpaqueBackground
         )
-        if scale > 1.0 {
-            issues.append(.init(kind: .sourceWillUpscale(scale: scale), severity: .warning))
-        }
-
-        if preparedImage.mode == .transparentPadding {
-            let coverage = transparentContentCoverage(sourceWidth: sourceWidth, sourceHeight: sourceHeight)
-            if coverage < transparentCoverageWarningThreshold {
-                issues.append(.init(kind: .transparentContentTooSmall(coverage: coverage), severity: .warning))
-            }
-        }
+        issues.append(contentsOf: qualityCheck.issues)
 
         return .init(issues: issues)
     }
@@ -167,10 +277,22 @@ public enum ExportPreflight {
         preset: IconPlatformPreset,
         preparationMode: ImagePreparationMode
     ) -> ExportSummary {
+        summary(
+            outputURL: outputURL,
+            preset: preset,
+            preparationOptions: .init(mode: preparationMode)
+        )
+    }
+
+    public static func summary(
+        outputURL: URL,
+        preset: IconPlatformPreset,
+        preparationOptions: ImagePreparationOptions
+    ) -> ExportSummary {
         ExportSummary(
             outputURL: outputURL,
             platformName: preset.displayName,
-            preparationName: preparationMode.displayName,
+            preparationName: preparationOptions.displayDescription,
             generatedPNGCount: preset.slots.count,
             generatedFileCount: preset.slots.count + 1
         )
@@ -179,50 +301,5 @@ public enum ExportPreflight {
     private static func directoryExists(at url: URL, fileManager: FileManager) -> Bool {
         var isDirectory: ObjCBool = false
         return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
-    }
-
-    private static func preparationScale(sourceWidth: Int, sourceHeight: Int, mode: ImagePreparationMode) -> Double {
-        let sourceWidth = Double(sourceWidth)
-        let sourceHeight = Double(sourceHeight)
-        let canvasSize = Double(ImagePreparer.outputPixelSize)
-
-        switch mode {
-        case .centerCrop:
-            return max(canvasSize / sourceWidth, canvasSize / sourceHeight)
-        case .transparentPadding:
-            return min(canvasSize / sourceWidth, canvasSize / sourceHeight)
-        }
-    }
-
-    private static func transparentContentCoverage(sourceWidth: Int, sourceHeight: Int) -> Double {
-        let shorterSide = Double(min(sourceWidth, sourceHeight))
-        let longerSide = Double(max(sourceWidth, sourceHeight))
-        return shorterSide / longerSide
-    }
-
-    private static func containsTransparentPixels(_ image: CGImage) -> Bool {
-        let width = image.width
-        let height = image.height
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-
-        guard let context = CGContext(
-            data: &pixels,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            return false
-        }
-
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-        for index in stride(from: 3, to: pixels.count, by: 4) where pixels[index] < UInt8.max {
-            return true
-        }
-        return false
     }
 }
