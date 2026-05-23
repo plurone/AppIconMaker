@@ -1,0 +1,36 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+build/
+docs/
+tasks/
+openspec/
+*.xcuserstate
+*.xcscmblueprint
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+.vscode/
+.codex/
+
+# CocoaPods / Carthage
+Pods/
+Carthage/Build/
+
+# App archives and generated symbols
+*.ipa
+*.xcarchive
+*.dSYM
+
+# Local editor settings
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
